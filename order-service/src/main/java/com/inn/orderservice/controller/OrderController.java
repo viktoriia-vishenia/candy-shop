@@ -20,10 +20,4 @@ public class OrderController {
         orderService.addOrder(orderDto);
         return "Order added to the queue";
     }
-
-    @DeleteMapping("/{orderNumber}/item/{invCodeOrderItem}")
-    public String deleteItemFromOrder(@PathVariable String orderNumber, @PathVariable String invCodeOrderItem){
-        orderService.deleteItemFromOrder(orderNumber, invCodeOrderItem);
-        return "Candy deleted from the order";
-    }
 }
