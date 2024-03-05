@@ -6,12 +6,9 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class OrderItemDto {
+public class InventoryDto {
 
-        private Long id;
         private String invCode;
-        private Double price;
         private Integer quantity;
-
-    }
-
+        private boolean isAvailable;
+}
