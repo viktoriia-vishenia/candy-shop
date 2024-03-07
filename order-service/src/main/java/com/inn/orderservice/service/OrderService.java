@@ -28,7 +28,7 @@ public class OrderService {
     private final WebClient.Builder webClientBuilder;
 
 
-    public void addOrder(OrderDto orderDto) {
+    public String addOrder(OrderDto orderDto) {
 
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
@@ -61,6 +61,7 @@ public class OrderService {
       } else {
           throw new RuntimeException("Product is not available now");
       }
+      return "Order added";
     }
 
     private OrderItem mapToDto(OrderItemDto orderItemDto) {
