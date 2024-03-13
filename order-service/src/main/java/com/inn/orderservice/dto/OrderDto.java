@@ -10,6 +10,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OrderDto {
 
-
+    private String orderNumber;
+    private String orderStatus;
     private List<OrderItemDto> orderItemDtos;
 }

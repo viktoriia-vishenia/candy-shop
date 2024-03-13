@@ -1,16 +1,13 @@
 package com.inn.orderservice.controller;
 
 import com.inn.orderservice.dto.OrderDto;
+import com.inn.orderservice.dto.OrderItemDto;
 import com.inn.orderservice.service.OrderService;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
-import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.List;
 
 @RestController
 @RequestMapping("/order")
@@ -20,19 +17,34 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    @CircuitBreaker(name = "inventory", fallbackMethod = "fallbackMethod")
-    @TimeLimiter(name = "inventory")
-    @Retry(name = "inventory")
-    public CompletableFuture<String> addOrder(@RequestBody OrderDto orderDto){
-        log.info("Adding of order in process");
-        return CompletableFuture.supplyAsync(() -> orderService.addOrder(orderDto));
+    @GetMapping("/all")
+    public List<OrderDto> findAll(){
+     return orderService.findAll();
     }
 
-    public CompletableFuture<String> fallbackMethod(OrderDto orderDto, RuntimeException runtimeException) {
-        log.info("Order haven't added, fallback method executed");
-        return CompletableFuture.supplyAsync(()
-                -> " Something went wrong, please order after some time!");
+    @GetMapping("/find/{orderNumber}")
+    public OrderDto findOrder(@PathVariable String orderNumber) {
+        return orderService.getByOrderNumber(orderNumber);
+    }
+    @PatchMapping("/update-status/{orderNumber}")
+    public void updateOrderStatus(@RequestBody String statusDto,
+                                  @PathVariable String orderNumber)  {
+        orderService.updateOrderStatus(statusDto, orderNumber);
+    }
+
+    @PatchMapping("/update-order-items/{orderNumber}")
+    public void updateOrderItems(@RequestBody List <OrderItemDto> orderItemDto,
+                                  @PathVariable String orderNumber)  {
+        orderService.updateOrderItems(orderItemDto, orderNumber);
+    }
+
+    @PostMapping("/add")
+    public void addOrder(@RequestBody List <OrderItemDto> orderItemDtos)  {
+       orderService.addOrder(orderItemDtos);
+    }
+
+    @DeleteMapping("/delete/{orderNumber}")
+    public void deleteOrder(@PathVariable String orderNumber) {
+        orderService.deleteOrder(orderNumber);
     }
 }

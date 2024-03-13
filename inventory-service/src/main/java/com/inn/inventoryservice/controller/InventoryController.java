@@ -4,6 +4,8 @@ import com.inn.inventoryservice.dto.InventoryDto;
 import com.inn.inventoryservice.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,8 +19,24 @@ public class InventoryController {
     private final InventoryService inventoryService;
 
     @GetMapping
+    public List<InventoryDto> getAll(){
+     return  inventoryService.getAll();
+    }
+
+    @GetMapping("/available")
     public List<InventoryDto> isAvailable(@RequestParam List<String> invCode){
-        log.info("Check availability of products by invCodes: {}", invCode);
       return inventoryService.isAvailable(invCode);
+    }
+
+    @PutMapping("/update")
+    public ResponseEntity<String> updateInventory(@RequestBody InventoryDto inventoryDto){
+        inventoryService.updateInventory(inventoryDto);
+        return new ResponseEntity<>("Inventory updated successfully", HttpStatus.CREATED);
+    }
+
+    @PostMapping("/add")
+    public ResponseEntity<String> addInventory(@RequestBody InventoryDto inventory) {
+        inventoryService.addInventory(inventory);
+        return new ResponseEntity<>("Inventory added successfully", HttpStatus.CREATED);
     }
 }

@@ -8,5 +8,6 @@ import lombok.*;
 @Builder
 public class InventoryDto {
         private String invCode;
+        private Integer quantity;
         private boolean isAvailable;
 }

@@ -5,18 +5,16 @@ import com.inn.orderservice.dto.OrderDto;
 import com.inn.orderservice.dto.OrderItemDto;
 import com.inn.orderservice.model.Order;
 import com.inn.orderservice.model.OrderItem;
+import com.inn.orderservice.model.Status;
 import com.inn.orderservice.repository.OrderItemRepository;
 import com.inn.orderservice.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
-
-
 import org.springframework.web.reactive.function.client.WebClient;
+
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,69 +26,142 @@ public class OrderService {
     private final WebClient.Builder webClientBuilder;
 
 
-    public String addOrder(OrderDto orderDto) {
-
+    @Transactional
+    public void addOrder(List <OrderItemDto> orderItemDtos)  {
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
+        order.setOrderStatus(Status.INITIATED);
 
-        List<OrderItem> orderItems = orderDto.getOrderItemDtos()
-                .stream()
-                .map(this::mapToDto)
+        List<OrderItem> requiredOrderItems = orderItemDtos.stream()
+                .map(this::mapToOrderItem).toList();
+
+        List<String> invCodes = requiredOrderItems.stream()
+                .map(OrderItem::getInvCode)
                 .toList();
 
-        order.setOrderItems(orderItems);
+        InventoryDto[] inventoryAvailable = webClientBuilder.build().get()
+                .uri("http://localhost:8089/inventory/available",
+                        uriBuilder -> uriBuilder.queryParam("invCode", invCodes).build())
+                .retrieve()
+                .bodyToMono(InventoryDto[].class)
+                .block();
 
-       List <String> invCodes = order.getOrderItems().stream().map(OrderItem::getInvCode).toList();
 
-      InventoryDto[] inventoryAvailable = webClientBuilder.build().get()
-                        .uri("http://inventory-service/inventory",
-                                uriBuilder -> uriBuilder.queryParam("invCode", invCodes).build())
-                                .retrieve()
-                                        .bodyToMono(InventoryDto[].class)
-                                                .block();
+        Map<String, Integer> map = Arrays.stream(inventoryAvailable)
+                .collect(Collectors.toMap(InventoryDto::getInvCode, InventoryDto::getQuantity));
 
-      boolean allProductsAreAvailable =  Arrays.stream(inventoryAvailable).allMatch(InventoryDto::isAvailable);
+        List<OrderItem> itemsInOrder = new ArrayList<>();
 
-      if(allProductsAreAvailable){
-          orderRepository.save(order);
+        for (OrderItem item : requiredOrderItems) {
+            String invCode = item.getInvCode();
+            if (map.get(invCode)>= item.getQuantity()) {
+                itemsInOrder.add(item);
+            }
+        }
 
-          for (OrderItem orderItem : orderItems) {
-              orderItem.setOrder(order);
-              orderItemRepository.save(orderItem);
-          }
-      } else {
-          throw new RuntimeException("Product is not available now");
-      }
-      return "Order added";
+
+        if (!itemsInOrder.isEmpty()) {
+            order.setOrderItems(itemsInOrder);
+            for (OrderItem orderItem : itemsInOrder) {
+                orderItem.setOrder(order);
+            }
+            orderRepository.save(order);
+        } else {
+            throw new RuntimeException("Products not available");
+        }
     }
 
-    private OrderItem mapToDto(OrderItemDto orderItemDto) {
+    @Transactional
+    public void updateOrderStatus(String statusDto, String orderNumber) {
+            Order order = orderRepository
+                    .findOrderByOrderNumber(orderNumber);
+
+            if (order != null) {
+               order.setOrderStatus(Status.fromString(statusDto));
+               orderRepository.save(order);
+            } else {
+                throw new RuntimeException("Order is not found");
+            }
+        }
+
+        @Transactional
+        public void updateOrderItems(List <OrderItemDto> orderItemsDto
+                , String orderNumber) {
+
+            Order order = orderRepository
+                    .getOrderByOrderNumber(orderNumber);
+
+            if (order != null) {
+
+                List<OrderItem> oldOrderItems =
+                        orderItemRepository.findAllByOrderId(order.getId());
+
+                orderItemRepository.deleteAll(oldOrderItems);
+
+                List <OrderItem> newOrderItems = orderItemsDto
+                        .stream().map(this::mapToOrderItem).collect(Collectors.toList());
+
+                for (OrderItem orderItem: newOrderItems) {
+                    orderItem.setOrder(order);
+                }
+                order.setOrderItems(newOrderItems);
+            orderRepository.save(order);
+        } else {
+            throw new RuntimeException("Order is not found");
+        }
+    }
+
+        @Transactional
+        public void deleteOrder(String orderNumber) {
+            Order order = orderRepository.getOrderByOrderNumber(orderNumber);
+            Status orderStatus = order.getOrderStatus();
+            if (!orderStatus.equals(Status.CREATED)) {
+                List<OrderItem> orderItems =
+                        orderItemRepository.findAllByOrderId(order.getId());
+                orderItemRepository.deleteAll(orderItems);
+
+                orderRepository.deleteOrderByOrderNumber(orderNumber);
+            } else {
+                throw new RuntimeException("Order already created");
+            }
+        }
+
+       @Transactional(readOnly = true)
+       public List<OrderDto> findAll(){
+      List<Order> orders = orderRepository.findAll();
+      return orders.stream().map(this::mapToOrderDto).toList();
+       }
+
+       @Transactional(readOnly = true)
+       public OrderDto getByOrderNumber(String orderNumber){
+       Order order = orderRepository.getOrderByOrderNumber(orderNumber);
+       return mapToOrderDto(order);
+       }
+
+    private OrderItem mapToOrderItem(OrderItemDto orderItemDto) {
         OrderItem orderItem = new OrderItem();
         orderItem.setPrice(orderItemDto.getPrice());
         orderItem.setQuantity(orderItemDto.getQuantity());
         orderItem.setInvCode(orderItemDto.getInvCode());
         return orderItem;
     }
+    private OrderItemDto mapToOrderItemDto(OrderItem orderItem) {
+        OrderItemDto orderItemDto = new OrderItemDto();
+        orderItemDto.setPrice(orderItem.getPrice());
+        orderItemDto.setQuantity(orderItem.getQuantity());
+        orderItemDto.setInvCode(orderItem.getInvCode());
+        return orderItemDto;
+    }
 
-
+    private OrderDto mapToOrderDto (Order order){
+        OrderDto orderDto = new OrderDto();
+        orderDto.setOrderNumber(order.getOrderNumber());
+        orderDto.setOrderStatus(order.getOrderStatus().toString());
+        orderDto.setOrderItemDtos(order.getOrderItems()
+                .stream().map(this::mapToOrderItemDto).toList());
+        return orderDto;
+    }
 
 }
-//    public void placeOrder(OrderDto orderDto) {
-//        Order order = new Order();
-//        order.setOrderNumber(UUID.randomUUID().toString());
-//        List<OrderItem> orderItems = new ArrayList<>();
-//
-//        for (OrderItemDto orderItemDto : orderDto.getOrderItemDtos()) {
-//            String message = "CHECK_INVENTORY:" + orderItemDto.getInvCode();
-//            String response = (String) rabbitTemplate.convertSendAndReceive(topicExchange, @Value("${rabbitmq.routing.key}"), message);
-//            if ("AVAILABLE".equals(response)) {
-//                orderItems.add(mapToDto(orderItemDto));
-//            } else {
-//                System.out.println("Item not available");
-//            }
-//        }
-//        order.setOrderItems(orderItems);
-//        orderRepository.save(order);
-//        orderItemRepository.save(orderItems);
-//    }
+
 

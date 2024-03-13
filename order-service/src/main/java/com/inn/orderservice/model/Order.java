@@ -1,7 +1,10 @@
 package com.inn.orderservice.model;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
@@ -19,7 +22,11 @@ public class Order {
 
     private String orderNumber;
 
-    @OneToMany(cascade = CascadeType.ALL)
+    @Column(name = "status")
+    @Enumerated(EnumType.STRING)
+    private Status orderStatus;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<OrderItem> orderItems;
 
 }
