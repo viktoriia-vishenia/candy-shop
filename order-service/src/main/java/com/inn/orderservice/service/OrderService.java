@@ -29,7 +29,7 @@ public class OrderService {
 
 
     @Transactional
-    public void addOrder(List <OrderItemDto> orderItemDtos) {
+    public String addOrder(List <OrderItemDto> orderItemDtos) {
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
         order.setOrderStatus(Status.INITIATED);
@@ -72,6 +72,7 @@ public class OrderService {
                 order.setOrderStatus(Status.REJECTED);
                 orderRepository.save(order);
             }
+            return "Order is added with status " + order.getOrderStatus();
         }
 
     @Transactional
@@ -88,7 +89,7 @@ public class OrderService {
         }
 
         @Transactional
-        public void sendOrder(String orderNumber){
+        public String sendOrder(String orderNumber){
         Order order = orderRepository
                     .findOrderByOrderNumber(orderNumber);
         if (order == null){
@@ -120,6 +121,7 @@ public class OrderService {
           if(responseEntity != null && responseEntity.getStatusCode().is2xxSuccessful()){
               order.setOrderStatus(Status.SENT);
               orderRepository.save(order);
+              return "Order is sent";
           } else{
               throw new RuntimeException("Sorry, order couldn't be sent, something went wrong");
           }

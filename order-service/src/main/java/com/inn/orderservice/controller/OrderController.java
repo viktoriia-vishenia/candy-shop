@@ -3,6 +3,9 @@ package com.inn.orderservice.controller;
 import com.inn.orderservice.dto.OrderDto;
 import com.inn.orderservice.dto.OrderItemDto;
 import com.inn.orderservice.service.OrderService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -10,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/order")
@@ -43,20 +47,32 @@ public class OrderController {
     }
 
     @PatchMapping("/send-order/{orderNumber}")
-    public ResponseEntity<String> sendOrder( @PathVariable String orderNumber)  {
-        orderService.sendOrder(orderNumber);
-        return new ResponseEntity<>("Order was sent successfully.",HttpStatus.OK);
+    @CircuitBreaker(name = "inventoryUpdate", fallbackMethod = "fallbackSendOrder")
+    @TimeLimiter(name = "inventoryUpdate")
+    @Retry(name = "inventoryUpdate")
+    public CompletableFuture<String> sendOrder( @PathVariable String orderNumber)  {
+        return CompletableFuture.supplyAsync(() -> orderService.sendOrder(orderNumber));
     }
 
     @PostMapping("/add")
-    public ResponseEntity<String> addOrder(@RequestBody List <OrderItemDto> orderItemDtos)  {
-       orderService.addOrder(orderItemDtos);
-        return new ResponseEntity<>("Order was added successfully.",HttpStatus.OK);
+    @CircuitBreaker(name = "inventoryIsAvailable", fallbackMethod = "fallbackAddOrder")
+    @TimeLimiter(name = "inventoryIsAvailable")
+    @Retry(name = "inventoryIsAvailable")
+    public CompletableFuture<String> addOrder(@RequestBody List <OrderItemDto> orderItemDtos)  {
+        return CompletableFuture.supplyAsync(() -> orderService.addOrder(orderItemDtos));
     }
 
     @DeleteMapping("/delete/{orderNumber}")
     public ResponseEntity<String> deleteOrder(@PathVariable String orderNumber) {
         orderService.deleteOrder(orderNumber);
         return new ResponseEntity<>("Order was deleted successfully.",HttpStatus.OK);
+    }
+
+    public CompletableFuture<String> fallBackAddOrder(List<OrderItemDto> orderItemDtos, RuntimeException runtimeException) {
+        return CompletableFuture.supplyAsync(() -> "Something went wrong, please order after some time!");
+    }
+
+    public CompletableFuture<String> fallBackSendOrder(String orderNumber, RuntimeException runtimeException) {
+        return CompletableFuture.supplyAsync(() -> "Something went wrong, please send after some time!");
     }
 }
