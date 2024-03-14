@@ -33,18 +33,20 @@ public class InventoryService {
     }
 
     @Transactional
-    public void updateInventory(InventoryDto inventoryDto) {
+    public void updateInventory(List <InventoryDto> inventoryDtoList) {
+        for (InventoryDto inventoryDto : inventoryDtoList) {
+            Inventory inventory = inventoryRepository
+                    .findInventoryByInvCode(inventoryDto.getInvCode());
 
-        Inventory inventory = inventoryRepository
-                .findInventoryByInvCode(inventoryDto.getInvCode());
+            int newQuantity = inventory.getQuantity() - inventoryDto.getQuantity();
 
-        Integer newQuantity = inventory.getQuantity() - inventoryDto.getQuantity();
+            if (newQuantity > 0) {
+                inventory.setQuantity(newQuantity);
 
-        if (newQuantity > 0) {
-            inventory.setQuantity(newQuantity);
-            inventoryRepository.save(inventory);
-        } else {
-            inventoryRepository.deleteInventoryByInvCode(inventory.getInvCode());
+                inventoryRepository.save(inventory);
+            } else {
+                inventoryRepository.deleteInventoryByInvCode(inventory.getInvCode());
+            }
         }
     }
 
@@ -60,16 +62,28 @@ public class InventoryService {
 
     @Transactional
     public void addInventory(InventoryDto inventoryDto) {
-        Inventory inventory = new Inventory();
-        inventory.setInvCode(inventoryDto.getInvCode());
-        inventory.setQuantity(inventoryDto.getQuantity());
-        inventoryRepository.save(inventory);
+        if (inventoryRepository.findInventoryByInvCode(inventoryDto.getInvCode()) != null) {
+            Inventory inventory = inventoryRepository
+                    .findInventoryByInvCode(inventoryDto.getInvCode());
+            inventory.setInvCode(inventoryDto.getInvCode());
+            inventory.setQuantity(inventoryDto.getQuantity() + inventory.getQuantity());
+            inventoryRepository.save(inventory);
+        } else {
+            Inventory inventory = new Inventory();
+            inventory.setInvCode(inventoryDto.getInvCode());
+            inventory.setQuantity(inventoryDto.getQuantity());
+            inventoryRepository.save(inventory);
+        }
     }
 
     private InventoryDto convertToDto(Inventory inventory) {
         InventoryDto dto = new InventoryDto();
         dto.setInvCode(inventory.getInvCode());
-        dto.setQuantity(inventory.getQuantity());
+        int quantity = inventory.getQuantity();
+        dto.setQuantity(quantity);
+        if(quantity>0){
+            dto.setAvailable(true);
+        }
         return dto;
     }
 }

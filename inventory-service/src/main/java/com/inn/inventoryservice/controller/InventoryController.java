@@ -28,9 +28,9 @@ public class InventoryController {
       return inventoryService.isAvailable(invCode);
     }
 
-    @PutMapping("/update")
-    public ResponseEntity<String> updateInventory(@RequestBody InventoryDto inventoryDto){
-        inventoryService.updateInventory(inventoryDto);
+    @PatchMapping("/update")
+    public ResponseEntity<String> updateInventory(@RequestBody List <InventoryDto> inventoryDtoList){
+        inventoryService.updateInventory(inventoryDtoList);
         return new ResponseEntity<>("Inventory updated successfully", HttpStatus.CREATED);
     }
 
