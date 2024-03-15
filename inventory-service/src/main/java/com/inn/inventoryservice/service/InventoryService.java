@@ -5,6 +5,8 @@ import com.inn.inventoryservice.model.Inventory;
 import com.inn.inventoryservice.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,7 @@ public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
 
+    private final KafkaTemplate <String,String> kafkaTemplate;
 
     @Transactional(readOnly = true)
     public List<InventoryDto> isAvailable(List<String> invCode) {
@@ -33,7 +36,8 @@ public class InventoryService {
     }
 
     @Transactional
-    public void updateInventory(List <InventoryDto> inventoryDtoList) {
+    @KafkaListener(topics = "orderCreated", groupId = "update-inventory-consumer")
+    public void updateInventory( List <InventoryDto> inventoryDtoList) {
         for (InventoryDto inventoryDto : inventoryDtoList) {
             Inventory inventory = inventoryRepository
                     .findInventoryByInvCode(inventoryDto.getInvCode());
@@ -44,10 +48,13 @@ public class InventoryService {
                 inventory.setQuantity(newQuantity);
 
                 inventoryRepository.save(inventory);
+
             } else {
                 inventoryRepository.deleteInventoryByInvCode(inventory.getInvCode());
             }
         }
+ String orderNumber =  inventoryDtoList.get(0).getOrderNumber();
+        kafkaTemplate.send("orderSend", orderNumber);
     }
 
     @Transactional(readOnly = true)

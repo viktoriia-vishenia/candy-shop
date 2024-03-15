@@ -10,4 +10,5 @@ public class InventoryDto {
         private String invCode;
         private Integer quantity;
         private boolean isAvailable;
+        private String orderNumber;
 }

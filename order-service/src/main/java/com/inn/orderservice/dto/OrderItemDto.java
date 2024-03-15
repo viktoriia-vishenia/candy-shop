@@ -12,7 +12,7 @@ public class OrderItemDto {
         private String invCode;
         private Double price;
         private Integer quantity;
-        private OrderDto orderDto;
+        private String orderNumber;
 
     }
 

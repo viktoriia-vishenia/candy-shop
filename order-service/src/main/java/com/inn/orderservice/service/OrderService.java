@@ -9,11 +9,11 @@ import com.inn.orderservice.model.Status;
 import com.inn.orderservice.repository.OrderItemRepository;
 import com.inn.orderservice.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.BodyInserters;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -26,6 +26,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final WebClient.Builder webClientBuilder;
+    private final KafkaTemplate <String, List<InventoryDto>> kafkaTemplate;
 
 
     @Transactional
@@ -41,6 +42,7 @@ public class OrderService {
                 .map(OrderItem::getInvCode)
                 .toList();
 
+        //find just existing in inventory items without estimating sufficient quantity
         InventoryDto[] inventoryAvailable = webClientBuilder.build().get()
                 .uri("http://localhost:8089/inventory/available",
                         uriBuilder -> uriBuilder.queryParam("invCode", invCodes).build())
@@ -48,12 +50,12 @@ public class OrderService {
                 .bodyToMono(InventoryDto[].class)
                 .block();
 
-
+        //create map for estimating quantity
             Map<String, Integer> map = Arrays.stream(inventoryAvailable)
                     .collect(Collectors.toMap(InventoryDto::getInvCode, InventoryDto::getQuantity));
 
             List<OrderItem> itemsInOrder = new ArrayList<>();
-
+            //add in final order only items with sufficient amount
             for (OrderItem item : requiredOrderItems) {
                 String invCode = item.getInvCode();
                 if (map.get(invCode) >= item.getQuantity()) {
@@ -68,11 +70,16 @@ public class OrderService {
                 }
                 order.setOrderStatus(Status.CREATED);
                 orderRepository.save(order);
+
+                List <InventoryDto> inventoryDtoList = itemsInOrder.stream().map(this::mapToInventoryDto)
+                                .collect(Collectors.toList());
+                String orderNumber = order.getOrderNumber();
+                kafkaTemplate.send("orderCreated", inventoryDtoList);
             } else {
                 order.setOrderStatus(Status.REJECTED);
                 orderRepository.save(order);
             }
-            return "Order is added with status " + order.getOrderStatus();
+            return "Order is added";
         }
 
     @Transactional
@@ -88,10 +95,12 @@ public class OrderService {
             }
         }
 
-        @Transactional
-        public String sendOrder(String orderNumber){
+
+    @Transactional
+    @KafkaListener(topics = "orderSend", groupId = "order-send-consumer")
+    public void sendOrder(String orderNumber){
         Order order = orderRepository
-                    .findOrderByOrderNumber(orderNumber);
+                .findOrderByOrderNumber(orderNumber);
         if (order == null){
             throw new RuntimeException("Order is not found");
         }
@@ -105,29 +114,13 @@ public class OrderService {
             throw new RuntimeException("Wait please, order hasn't created");
         }
 
-        List<OrderItem> orderItems = orderItemRepository
-                .findAllByOrderId(order.getId());
+            order.setOrderStatus(Status.SENT);
+            orderRepository.save(order);
 
-      List<InventoryDto> inventoryDtoList =
-             orderItems.stream().map(this::mapToInventoryDto).toList();
+    }
 
-        ResponseEntity<Void> responseEntity = webClientBuilder.build().patch()
-                    .uri("http://localhost:8089/inventory/update")
-                    .body(BodyInserters.fromValue(inventoryDtoList))
-                    .retrieve()
-                    .toBodilessEntity()
-                    .block();
 
-          if(responseEntity != null && responseEntity.getStatusCode().is2xxSuccessful()){
-              order.setOrderStatus(Status.SENT);
-              orderRepository.save(order);
-              return "Order is sent";
-          } else{
-              throw new RuntimeException("Sorry, order couldn't be sent, something went wrong");
-          }
-        }
-
-        @Transactional
+    @Transactional
         public void updateOrderItems(List <OrderItemDto> orderItemsDto
                 , String orderNumber) {
 
@@ -209,7 +202,7 @@ public class OrderService {
         InventoryDto inventoryDto = new InventoryDto();
         inventoryDto.setInvCode(orderItem.getInvCode());
         inventoryDto.setQuantity(orderItem.getQuantity());
-
+        inventoryDto.setOrderNumber(orderItem.getOrder().getOrderNumber());
         return inventoryDto;
     }
 }
