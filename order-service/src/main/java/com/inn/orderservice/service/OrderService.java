@@ -44,7 +44,7 @@ public class OrderService {
 
         //find just existing in inventory items without estimating sufficient quantity
         InventoryDto[] inventoryAvailable = webClientBuilder.build().get()
-                .uri("http://localhost:8089/inventory/available",
+                .uri("http://localhost:8084/inventory/available",
                         uriBuilder -> uriBuilder.queryParam("invCode", invCodes).build())
                 .retrieve()
                 .bodyToMono(InventoryDto[].class)
@@ -79,7 +79,7 @@ public class OrderService {
                 order.setOrderStatus(Status.REJECTED);
                 orderRepository.save(order);
             }
-            return "Order is added";
+            return "Order is added. Check the status";
         }
 
     @Transactional
@@ -116,7 +116,6 @@ public class OrderService {
 
             order.setOrderStatus(Status.SENT);
             orderRepository.save(order);
-
     }
 
 
@@ -142,6 +141,10 @@ public class OrderService {
                 }
                 order.setOrderItems(newOrderItems);
             orderRepository.save(order);
+
+            List<InventoryDto> inventoryDtoList = orderItemsDto.stream()
+                    .map(this::mapToInventoryDto).collect(Collectors.toList());
+           kafkaTemplate.send("orderCreated", inventoryDtoList);
         } else {
             throw new RuntimeException("Order is not found");
         }
@@ -203,6 +206,14 @@ public class OrderService {
         inventoryDto.setInvCode(orderItem.getInvCode());
         inventoryDto.setQuantity(orderItem.getQuantity());
         inventoryDto.setOrderNumber(orderItem.getOrder().getOrderNumber());
+        return inventoryDto;
+    }
+
+    private InventoryDto mapToInventoryDto (OrderItemDto orderItemDto){
+        InventoryDto inventoryDto = new InventoryDto();
+        inventoryDto.setInvCode(orderItemDto.getInvCode());
+        inventoryDto.setQuantity(orderItemDto.getQuantity());
+        inventoryDto.setOrderNumber(orderItemDto.getOrderNumber());
         return inventoryDto;
     }
 }

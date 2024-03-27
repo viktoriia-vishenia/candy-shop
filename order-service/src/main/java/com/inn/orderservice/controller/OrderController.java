@@ -3,15 +3,17 @@ package com.inn.orderservice.controller;
 import com.inn.orderservice.dto.OrderDto;
 import com.inn.orderservice.dto.OrderItemDto;
 import com.inn.orderservice.service.OrderService;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
-import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,7 +25,7 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    @GetMapping("/all")
+    @GetMapping()
     public List<OrderDto> findAll(){
      return orderService.findAll();
     }
@@ -47,20 +49,22 @@ public class OrderController {
     }
 
     @PatchMapping("/send-order/{orderNumber}")
-    @CircuitBreaker(name = "inventoryUpdate", fallbackMethod = "fallbackSendOrder")
-    @TimeLimiter(name = "inventoryUpdate")
-    @Retry(name = "inventoryUpdate")
-    public CompletableFuture<String> sendOrder( @PathVariable String orderNumber)  {
-        return CompletableFuture.supplyAsync(() -> orderService.sendOrder(orderNumber));
+    public ResponseEntity<String> sendOrder( @PathVariable String orderNumber)  {
+        orderService.sendOrder(orderNumber);
+        return new ResponseEntity<>("Order was sent.",HttpStatus.OK);
     }
 
     @PostMapping("/add")
-    @CircuitBreaker(name = "inventoryIsAvailable", fallbackMethod = "fallbackAddOrder")
-    @TimeLimiter(name = "inventoryIsAvailable")
-    @Retry(name = "inventoryIsAvailable")
-    public CompletableFuture<String> addOrder(@RequestBody List <OrderItemDto> orderItemDtos)  {
-        return CompletableFuture.supplyAsync(() -> orderService.addOrder(orderItemDtos));
+    public ResponseEntity<String> addOrder(@RequestBody List <OrderItemDto> orderItemDtos) {
+        orderService.addOrder(orderItemDtos);
+        return new ResponseEntity<>("Order added", HttpStatus.OK);
     }
+//    @CircuitBreaker(name = "inventoryIsAvailable", fallbackMethod = "fallBackAddOrder")
+//    @TimeLimiter(name = "inventoryIsAvailable")
+//    @Retry(name = "inventoryIsAvailable")
+//    public CompletableFuture<String> addOrder(@RequestBody List <OrderItemDto> orderItemDtos)  {
+//        return CompletableFuture.supplyAsync(() -> orderService.addOrder(orderItemDtos));
+
 
     @DeleteMapping("/delete/{orderNumber}")
     public ResponseEntity<String> deleteOrder(@PathVariable String orderNumber) {
@@ -68,11 +72,28 @@ public class OrderController {
         return new ResponseEntity<>("Order was deleted successfully.",HttpStatus.OK);
     }
 
+
     public CompletableFuture<String> fallBackAddOrder(List<OrderItemDto> orderItemDtos, RuntimeException runtimeException) {
         return CompletableFuture.supplyAsync(() -> "Something went wrong, please order after some time!");
     }
 
     public CompletableFuture<String> fallBackSendOrder(String orderNumber, RuntimeException runtimeException) {
         return CompletableFuture.supplyAsync(() -> "Something went wrong, please send after some time!");
+    }
+
+    @GetMapping("/logout")
+    private String performLogout(HttpServletRequest request, HttpServletResponse response) throws IOException {
+
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+
+        SecurityContextHolder.clearContext();
+
+        String redirectUrl = "http://localhost:8080/realms/candy-shop-realm/protocol/openid-connect/logout";
+        response.sendRedirect(redirectUrl);
+
+        return "You are logout ";
     }
 }

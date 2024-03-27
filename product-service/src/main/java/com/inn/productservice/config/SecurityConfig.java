@@ -28,9 +28,10 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity.oauth2ResourceServer(config -> config.jwt(Customizer.withDefaults()))
                 .oauth2Login(Customizer.withDefaults())
+                .logout(Customizer.withDefaults())
                 .authorizeHttpRequests(request -> request.requestMatchers("/error").permitAll()
                         .requestMatchers("/product/add").hasRole("ADMIN")
-                        .anyRequest().authenticated());
+                        .requestMatchers("/product/**").permitAll());
         return httpSecurity.build();
     }
 

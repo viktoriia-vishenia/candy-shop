@@ -1,6 +1,6 @@
 package com.inn.inventoryservice.config;
 
-import com.inn.orderservice.dto.InventoryDto;
+import com.inn.inventoryservice.dto.InventoryDto;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;

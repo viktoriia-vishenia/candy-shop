@@ -1,5 +1,3 @@
-DROP table inventory;
-
 CREATE TABLE IF NOT EXISTS inventory (
                                          id BIGSERIAL PRIMARY KEY,
                                          inv_code VARCHAR(255),
