@@ -3,6 +3,9 @@ package com.inn.orderservice.controller;
 import com.inn.orderservice.dto.OrderDto;
 import com.inn.orderservice.dto.OrderItemDto;
 import com.inn.orderservice.service.OrderService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -54,17 +57,13 @@ public class OrderController {
         return new ResponseEntity<>("Order was sent.",HttpStatus.OK);
     }
 
+    @CircuitBreaker(name = "inventoryIsAvailable", fallbackMethod = "fallBackAddOrder")
+    @TimeLimiter(name = "inventoryIsAvailable")
+    @Retry(name = "inventoryIsAvailable")
     @PostMapping("/add")
-    public ResponseEntity<String> addOrder(@RequestBody List <OrderItemDto> orderItemDtos) {
-        orderService.addOrder(orderItemDtos);
-        return new ResponseEntity<>("Order added", HttpStatus.OK);
+    public CompletableFuture<String> addOrder(@RequestBody List <OrderItemDto> orderItemDtos) {
+        return CompletableFuture.supplyAsync(() -> orderService.addOrder(orderItemDtos));
     }
-//    @CircuitBreaker(name = "inventoryIsAvailable", fallbackMethod = "fallBackAddOrder")
-//    @TimeLimiter(name = "inventoryIsAvailable")
-//    @Retry(name = "inventoryIsAvailable")
-//    public CompletableFuture<String> addOrder(@RequestBody List <OrderItemDto> orderItemDtos)  {
-//        return CompletableFuture.supplyAsync(() -> orderService.addOrder(orderItemDtos));
-
 
     @DeleteMapping("/delete/{orderNumber}")
     public ResponseEntity<String> deleteOrder(@PathVariable String orderNumber) {
